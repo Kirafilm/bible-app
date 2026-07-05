@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { getLastRead, getFontSize } from '../utils/storage';
+import { getLastRead, getFontSize, getReadingCounts } from '../utils/storage';
 import { BIBLE_BOOKS, getBookById } from '../data/bibleStructure';
+import { getDailyVerse, DailyVerse } from '../utils/dailyVerse';
 import { AppNavState } from '../App';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 export default function HomeScreen({ onNavigate }: Props) {
   const [lastRead, setLastRead] = useState<{ bookId: string; chapter: number } | null>(null);
   const [fontSize, setFontSize] = useState(18);
+  const [popularBooks, setPopularBooks] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
@@ -21,6 +23,18 @@ export default function HomeScreen({ onNavigate }: Props) {
     setLastRead(pos);
     const size = await getFontSize();
     setFontSize(size);
+    // 加載閱讀統計
+    const counts = await getReadingCounts();
+    const entries = Object.entries(counts).filter(([_, c]) => c > 0);
+    entries.sort((a, b) => b[1] - a[1]);
+    const topNames = entries
+      .slice(0, 6)
+      .map(([bookId]) => BIBLE_BOOKS.find(b => b.id === bookId)?.name)
+      .filter(Boolean) as string[];
+    // 不足 6 本時用默認書卷補齊
+    const defaults = ['約翰福音', '馬太福音', '詩篇', '羅馬書', '創世記', '箴言'];
+    const merged = [...new Set([...topNames, ...defaults])].slice(0, 6);
+    setPopularBooks(merged);
   }
 
   function handleContinue() {
@@ -32,7 +46,7 @@ export default function HomeScreen({ onNavigate }: Props) {
   }
 
   const lastBook = lastRead ? getBookById(lastRead.bookId) : null;
-  const dailyVerse = { text: '神愛世人，甚至將他的獨生子賜給他們，叫一切信他的，不至滅亡，反得永生。', ref: '約翰福音 3:16' };
+  const dailyVerse: DailyVerse = getDailyVerse();
 
   return (
     <ScrollView style={styles.container}>
@@ -55,7 +69,7 @@ export default function HomeScreen({ onNavigate }: Props) {
       {/* 快捷書卷 */}
       <Text style={styles.sectionTitle}>常用書卷</Text>
       <View style={styles.quickGrid}>
-        {['約翰福音', '馬太福音', '詩篇', '羅馬書', '創世記', '箴言'].map(name => {
+        {popularBooks.map(name => {
           const book = BIBLE_BOOKS.find(b => b.name === name);
           return (
             <TouchableOpacity

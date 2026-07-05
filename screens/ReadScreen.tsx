@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { getBookById, BIBLE_BOOKS } from '../data/bibleStructure';
-import { getChapterText, Verse } from '../data/bibleText';
-import { saveLastRead, getFontSize, addBookmark, Bookmark } from '../utils/storage';
+import { getChapterText, Verse, BibleVersion, VERSION_LABELS } from '../data/bibleVersions';
+import { saveLastRead, getFontSize, addBookmark, Bookmark, incrementReadingCount } from '../utils/storage';
 import { AppNavState } from '../App';
 
 interface Props {
   bookId: string;
   chapter: number;
+  bottomInset?: number;
+  bibleVersion: BibleVersion;
+  onVersionChange: (version: BibleVersion) => void;
   onNavigate: (screen: 'home' | 'browse' | 'bookmarks' | 'search' | 'read', bookId?: string, chapter?: number) => void;
   onChapterChange: (bookId: string, chapter: number) => void;
 }
 
-export default function ReadScreen({ bookId, chapter, onNavigate, onChapterChange }: Props) {
+export default function ReadScreen({ bookId, chapter, bottomInset = 0, bibleVersion, onVersionChange, onNavigate, onChapterChange }: Props) {
   const [verses, setVerses] = useState<Verse[] | null>(null);
   const [fontSize, setFontSize] = useState(18);
   const [showChapterNav, setShowChapterNav] = useState(false);
@@ -28,7 +31,7 @@ export default function ReadScreen({ bookId, chapter, onNavigate, onChapterChang
 
   useEffect(() => {
     loadFontAndChapter();
-  }, [bookId, chapter]);
+  }, [bookId, chapter, bibleVersion]);
 
   async function loadFontAndChapter() {
     const size = await getFontSize();
@@ -37,9 +40,10 @@ export default function ReadScreen({ bookId, chapter, onNavigate, onChapterChang
   }
 
   function loadChapter() {
-    const data = getChapterText(bookId, chapter);
+    const data = getChapterText(bookId, chapter, bibleVersion);
     setVerses(data);
     saveLastRead({ bookId, chapter });
+    incrementReadingCount(bookId);
   }
 
   function goToChapter(newChapter: number) {
@@ -111,22 +115,53 @@ export default function ReadScreen({ bookId, chapter, onNavigate, onChapterChang
 
   return (
     <View style={styles.container}>
-      {/* 頂部標題列 */}
+      {/* 頂部標題列：左右固定寬度，避免標題遮擋按鈕 */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => onNavigate('home')} style={styles.headerBtn}>
-          <Text style={styles.headerBtnText}>‹ 返回</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{book.name} {chapter}</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => setFontSize(f => Math.min(f + 2, 28))}>
-            <Text style={styles.headerBtnText}>A+</Text>
+        <View style={styles.headerSide}>
+          <TouchableOpacity
+            onPress={() => onNavigate('home')}
+            style={styles.headerBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.headerBtnText}>‹ 返回</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setFontSize(f => Math.max(f - 2, 12))}>
-            <Text style={styles.headerBtnText}>A-</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowChapterNav(!showChapterNav)}>
-            <Text style={styles.headerBtnText}>☰</Text>
-          </TouchableOpacity>
+        </View>
+        <View style={styles.headerCenter} pointerEvents="none">
+          <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+            {book.name} {chapter}
+          </Text>
+        </View>
+        <View style={styles.headerSide}>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => onVersionChange(bibleVersion === 'cuv' ? 'rcuv' : 'cuv')}
+              style={styles.versionBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Text style={styles.versionBtnText}>{VERSION_LABELS[bibleVersion]}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setFontSize(f => Math.min(f + 2, 28))}
+              style={styles.headerBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Text style={styles.headerBtnText}>A+</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setFontSize(f => Math.max(f - 2, 12))}
+              style={styles.headerBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Text style={styles.headerBtnText}>A-</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowChapterNav(!showChapterNav)}
+              style={styles.headerBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Text style={styles.headerBtnText}>☰</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -134,17 +169,19 @@ export default function ReadScreen({ bookId, chapter, onNavigate, onChapterChang
       {showChapterNav && (
         <View style={styles.chapterNav}>
           <Text style={styles.chapterNavTitle}>{book.name} - 選擇章數</Text>
-          <View style={styles.chapterGrid}>
-            {Array.from({ length: totalChapters }, (_, i) => i + 1).map(p => (
-              <TouchableOpacity
-                key={p}
-                style={[styles.chapterCell, p === chapter && styles.chapterCellActive]}
-                onPress={() => { goToChapter(p); setShowChapterNav(false); }}
-              >
-                <Text style={[styles.chapterCellText, p === chapter && styles.chapterCellTextActive]}>{p}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <ScrollView style={styles.chapterNavScroll} nestedScrollEnabled>
+            <View style={styles.chapterGrid}>
+              {Array.from({ length: totalChapters }, (_, i) => i + 1).map(p => (
+                <TouchableOpacity
+                  key={p}
+                  style={[styles.chapterCell, p === chapter && styles.chapterCellActive]}
+                  onPress={() => { goToChapter(p); setShowChapterNav(false); }}
+                >
+                  <Text style={[styles.chapterCellText, p === chapter && styles.chapterCellTextActive]}>{p}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
         </View>
       )}
 
@@ -181,7 +218,7 @@ export default function ReadScreen({ bookId, chapter, onNavigate, onChapterChang
           </ScrollView>
 
           {/* 上下章按鈕 */}
-          <View style={styles.navRow}>
+          <View style={[styles.navRow, { paddingBottom: Math.max(bottomInset, 8) }]}>
             <TouchableOpacity style={styles.navBtn} onPress={goToPrev}>
               <Text style={styles.navBtnText}>‹ 上一章</Text>
             </TouchableOpacity>
@@ -246,18 +283,63 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   header: {
-    flexDirection: 'row', alignItems: 'center', padding: 12,
-    borderBottomWidth: 1, borderBottomColor: '#e0e0e0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minHeight: 52,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
     backgroundColor: '#fff',
   },
-  headerBtn: { padding: 4 },
-  headerBtnText: { fontSize: 16, color: '#c49a6c', fontWeight: '500' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '600', color: '#333' },
-  headerRight: { flexDirection: 'row', gap: 12 },
-  chapterNav: {
-    padding: 16, backgroundColor: '#f9f9f9',
-    borderBottomWidth: 1, borderBottomColor: '#e0e0e0', maxHeight: 300,
+  headerSide: {
+    width: 148,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  headerBtn: {
+    minWidth: 36,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  headerBtnText: { fontSize: 16, color: '#c49a6c', fontWeight: '500' },
+  versionBtn: {
+    minWidth: 52,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    backgroundColor: '#f5efe6',
+    borderRadius: 6,
+    marginRight: 2,
+  },
+  versionBtnText: { fontSize: 12, color: '#c49a6c', fontWeight: '600' },
+  headerTitle: { fontSize: 16, fontWeight: '600', color: '#333', textAlign: 'center' },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flex: 1,
+    gap: 2,
+  },
+  chapterNav: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#f9f9f9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    maxHeight: 280,
+  },
+  chapterNavScroll: { flexGrow: 0 },
   chapterNavTitle: { fontSize: 14, color: '#666', marginBottom: 12 },
   chapterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chapterCell: {
@@ -276,7 +358,7 @@ const styles = StyleSheet.create({
   shareBtn: { padding: 4, marginLeft: 4 },
   shareText: { fontSize: 14, color: '#ccc' },
   navRow: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  navBtn: { flex: 1, padding: 14, alignItems: 'center' },
+  navBtn: { flex: 1, paddingVertical: 14, alignItems: 'center', minHeight: 48 },
   navBtnText: { fontSize: 15, color: '#c49a6c', fontWeight: '500' },
   emptyText: { fontSize: 15, color: '#999', textAlign: 'center', lineHeight: 24, marginBottom: 20 },
   goDemoBtn: { backgroundColor: '#c49a6c', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },

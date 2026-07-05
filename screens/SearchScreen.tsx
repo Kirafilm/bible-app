@@ -1,21 +1,22 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList } from 'react-native';
-import { searchVerses, Verse } from '../data/bibleText';
+import { searchVerses, Verse, BibleVersion, VERSION_LABELS } from '../data/bibleVersions';
 import { BIBLE_BOOKS, getBookById } from '../data/bibleStructure';
 import { AppNavState } from '../App';
 
 interface Props {
+  bibleVersion: BibleVersion;
   onNavigate: (screen: 'home' | 'browse' | 'bookmarks' | 'search' | 'read', bookId?: string, chapter?: number) => void;
 }
 
-export default function SearchScreen({ onNavigate }: Props) {
+export default function SearchScreen({ bibleVersion, onNavigate }: Props) {
   const [keyword, setKeyword] = useState('');
   const [results, setResults] = useState<Array<{ bookId: string; chapter: number; verse: Verse }>>([]);
   const [searched, setSearched] = useState(false);
 
   function handleSearch() {
     if (!keyword.trim()) return;
-    const r = searchVerses(keyword.trim());
+    const r = searchVerses(keyword.trim(), bibleVersion);
     setResults(r);
     setSearched(true);
   }
@@ -49,7 +50,7 @@ export default function SearchScreen({ onNavigate }: Props) {
       {searched && results.length === 0 && (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>找不到相關經文</Text>
-          <Text style={styles.emptyHint}>包含全套聖經和合本（66卷）</Text>
+          <Text style={styles.emptyHint}>包含全套聖經{VERSION_LABELS[bibleVersion]}（66卷）</Text>
         </View>
       )}
 

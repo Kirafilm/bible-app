@@ -1,6 +1,6 @@
 // Auto-generated full Chinese Union Version (CUV) Bible text
 // Source: xuan9/ChineseBibleSearchJS on GitHub
-// Generated: 2026-06-21T09:10:29.938Z
+// Generated: 2026-07-01T08:11:13.618Z
 
 export interface Verse {
   number: number;

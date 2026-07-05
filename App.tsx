@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar, BackHandler } from 'react-native';
 import HomeScreen from './screens/HomeScreen';
 import BrowseScreen from './screens/BrowseScreen';
 import BookmarksScreen from './screens/BookmarksScreen';
 import SearchScreen from './screens/SearchScreen';
 import ReadScreen from './screens/ReadScreen';
-import { BibleBook, BIBLE_BOOKS } from './data/bibleStructure';
-import { Verse } from './data/bibleText';
+import { useAppInsets } from './utils/useAppInsets';
+import { BibleVersion } from './data/bibleVersions';
+import { getBibleVersion, saveBibleVersion } from './utils/storage';
 
-// 簡單導航狀態
 type Screen = 'home' | 'browse' | 'bookmarks' | 'search' | 'read';
 
 export interface AppNavState {
@@ -18,11 +18,35 @@ export interface AppNavState {
 }
 
 export default function App() {
+  const insets = useAppInsets();
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [readState, setReadState] = useState<{ bookId: string; chapter: number }>({
     bookId: 'john',
     chapter: 3,
   });
+  const [bibleVersion, setBibleVersion] = useState<BibleVersion>('rcuv');
+
+  useEffect(() => {
+    getBibleVersion().then(setBibleVersion);
+  }, []);
+
+  // Android 實體返回鍵處理
+  useEffect(() => {
+    function handleBackPress() {
+      if (currentScreen !== 'home') {
+        setCurrentScreen('home');
+        return true; // 攔截返回，回到首頁
+      }
+      return false; // 已在首頁，退出應用
+    }
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => subscription.remove();
+  }, [currentScreen]);
+
+  function handleVersionChange(version: BibleVersion) {
+    setBibleVersion(version);
+    saveBibleVersion(version);
+  }
 
   function navigate(screen: Screen, bookId?: string, chapter?: number) {
     setCurrentScreen(screen);
@@ -38,12 +62,15 @@ export default function App() {
       case 'bookmarks':
         return <BookmarksScreen onNavigate={navigate} />;
       case 'search':
-        return <SearchScreen onNavigate={navigate} />;
+        return <SearchScreen onNavigate={navigate} bibleVersion={bibleVersion} />;
       case 'read':
         return (
           <ReadScreen
             bookId={readState.bookId}
             chapter={readState.chapter}
+            bottomInset={insets.bottom}
+            bibleVersion={bibleVersion}
+            onVersionChange={handleVersionChange}
             onNavigate={navigate}
             onChapterChange={(bookId, chapter) => setReadState({ bookId, chapter })}
           />
@@ -60,37 +87,63 @@ export default function App() {
     { key: 'search', label: '搜尋' },
   ];
 
-  // 閱讀頁面全螢幕顯示，不顯示底部 Tab
   if (currentScreen === 'read') {
     return (
-      <SafeAreaView style={styles.container}>
-        {renderScreen()}
-      </SafeAreaView>
+      <>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" translucent={Platform.OS === 'android'} />
+        <View
+          style={[
+            styles.container,
+            {
+              paddingTop: insets.top,
+              paddingLeft: insets.left,
+              paddingRight: insets.right,
+            },
+          ]}
+        >
+          {renderScreen()}
+        </View>
+      </>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>{renderScreen()}</View>
-      <View style={styles.tabBar}>
-        {tabs.map(tab => (
-          <TouchableOpacity
-            key={tab.key}
-            style={styles.tabItem}
-            onPress={() => navigate(tab.key)}
-          >
-            <Text
-              style={[
-                styles.tabLabel,
-                currentScreen === tab.key && styles.tabLabelActive,
-              ]}
-            >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+    <>
+      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" translucent={Platform.OS === 'android'} />
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: insets.top,
+            paddingLeft: insets.left,
+            paddingRight: insets.right,
+          },
+        ]}
+      >
+        <View style={styles.content}>{renderScreen()}</View>
+        <View style={[styles.tabBarSafe, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <View style={styles.tabBar}>
+            {tabs.map(tab => (
+              <TouchableOpacity
+                key={tab.key}
+                style={styles.tabItem}
+                onPress={() => navigate(tab.key)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    currentScreen === tab.key && styles.tabLabelActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
       </View>
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -102,21 +155,25 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  tabBar: {
-    flexDirection: 'row',
+  tabBarSafe: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
-    paddingBottom: 8,
-    paddingTop: 8,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    minHeight: 52,
+    alignItems: 'center',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 4,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    minHeight: 48,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#999',
   },
   tabLabelActive: {

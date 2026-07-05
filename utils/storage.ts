@@ -1,9 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BibleVersion } from '../data/bibleVersions';
 
 const KEYS = {
   LAST_READ: 'last_read',
   BOOKMARKS: 'bookmarks',
   FONT_SIZE: 'font_size',
+  BIBLE_VERSION: 'bible_version',
+  READING_COUNTS: 'reading_counts',
 };
 
 export interface ReadingPosition {
@@ -69,4 +72,36 @@ export async function getFontSize(): Promise<number> {
 
 export async function saveFontSize(size: number): Promise<void> {
   await AsyncStorage.setItem(KEYS.FONT_SIZE, size.toString());
+}
+
+// 聖經版本偏好
+export async function getBibleVersion(): Promise<BibleVersion> {
+  try {
+    const val = await AsyncStorage.getItem(KEYS.BIBLE_VERSION);
+    return val === 'cuv' ? 'cuv' : 'rcuv';
+  } catch {
+    return 'rcuv';
+  }
+}
+
+export async function saveBibleVersion(version: BibleVersion): Promise<void> {
+  await AsyncStorage.setItem(KEYS.BIBLE_VERSION, version);
+}
+
+// 閱讀次數統計（常用書卷排序依據）
+export type ReadingCounts = Record<string, number>;
+
+export async function getReadingCounts(): Promise<ReadingCounts> {
+  try {
+    const val = await AsyncStorage.getItem(KEYS.READING_COUNTS);
+    return val ? JSON.parse(val) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function incrementReadingCount(bookId: string): Promise<void> {
+  const counts = await getReadingCounts();
+  counts[bookId] = (counts[bookId] || 0) + 1;
+  await AsyncStorage.setItem(KEYS.READING_COUNTS, JSON.stringify(counts));
 }

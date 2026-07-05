@@ -17,23 +17,26 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bibleapp.app"
+      "bundleIdentifier": "com.kirafilm.bibleapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.bibleapp.app"
+      "package": "com.kirafilm.bibleapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "owner": "kirafilm",
     "extra": {
       "eas": {
-        "projectId": "34d6f779-ada3-4e4e-b776-ab0de442fade"
+        "projectId": "7209a044-fa2e-41e8-b277-47479962fee4"
       }
-    },
-    "owner": "kirafilm"
+    }
   }
 }
